@@ -1,17 +1,22 @@
-from numpy import zeros, flip, array
+from numpy import zeros, flip
 from copy import deepcopy
 import pygame
 import sys
 import math
+import random
 
-ROWS_COUNT = 8
-COLUMNS_COUNT = 8
+ROWS_COUNT = 6
+COLUMNS_COUNT = 7
 
 PLAYER = 0
 AI = 1
 
 PLAYER_VALUE = 1
 AI_VALUE = -1
+
+algorithm = -1
+MINIMAX = 0
+ALPHA_BETA = 1
 
 game_over = 0
 player_turn = PLAYER
@@ -32,9 +37,8 @@ class C4Puzzle:
         self.children = []
         self.valid_columns = valid_columns
         self.cutoff = 4
-
-    def is_full(self):
-        return all([not element for element in self.valid_columns])
+        self.score = 0
+        self.prev_col = 0
 
     def drop_coin(self, col, attribute):
         if self.board[ROWS_COUNT - 1][col] == 0:
@@ -77,14 +81,56 @@ class C4Puzzle:
                 for child in self.children:
                     child.create_tree(PLAYER, depth + 1)
 
+    def connections_count(self, attribute):
+        count = 0
+        # Check horizontal locations
+        for c in range(COLUMNS_COUNT - 3):
+            for r in range(ROWS_COUNT):
+                if self.board[r][c] == attribute \
+                        and self.board[r][c + 1] == attribute \
+                        and self.board[r][c + 2] == attribute \
+                        and self.board[r][c + 3] == attribute:
+                    count += 1
+
+        # Check vertical locations
+        for c in range(COLUMNS_COUNT):
+            for r in range(ROWS_COUNT - 3):
+                if self.board[r][c] == attribute \
+                        and self.board[r + 1][c] == attribute \
+                        and self.board[r + 2][c] == attribute \
+                        and self.board[r + 3][c] == attribute:
+                    count += 1
+
+        # Check positively sloped diagonals
+        for c in range(COLUMNS_COUNT - 3):
+            for r in range(ROWS_COUNT - 3):
+                if self.board[r][c] == attribute \
+                        and self.board[r + 1][c + 1] == attribute \
+                        and self.board[r + 2][c + 2] == attribute \
+                        and self.board[r + 3][c + 3] == attribute:
+                    count += 1
+
+        # Check negatively sloped diagonals
+        for c in range(COLUMNS_COUNT - 3):
+            for r in range(3, ROWS_COUNT):
+                if self.board[r][c] == attribute \
+                        and self.board[r - 1][c + 1] == attribute \
+                        and self.board[r - 2][c + 2] == attribute \
+                        and self.board[r - 3][c + 3] == attribute:
+                    count += 1
+        return count
+
     def minimax(self):
-        pass
+        return random.randint(0, 6)
 
     def alpha_beta(self):
-        pass
+        return random.randint(0, 6)
 
     def heuristic(self):
         pass
+
+    def is_full(self):
+        return all([not element for element in self.valid_columns])
 
     def print_board(self):
         print(flip(self.board, 0))
@@ -107,7 +153,29 @@ class C4Puzzle:
         pygame.display.update()
 
 
+def get_algorithm():
+    pygame.draw.rect(screen, GRAY, (0, 0, SQR_SIZE * COLUMNS_COUNT, SQR_SIZE * (ROWS_COUNT + 1)))
+    my_font2 = pygame.font.SysFont("monospace", 28)
+    label1 = my_font2.render("Press M for MiniMax Algorithm", True, BLUE)
+    label2 = my_font2.render("Any other key for Alpha-Beta", True, BLUE)
+    screen.blit(label1, (20, 175))
+    screen.blit(label2, (25, 275))
+    pygame.display.update()
+
+    while True:
+        for events in pygame.event.get():
+            if events.type == pygame.QUIT:
+                sys.exit()
+
+            if events.type == pygame.KEYDOWN:
+                if events.key == pygame.K_m:
+                    return MINIMAX
+                else:
+                    return ALPHA_BETA
+
+
 initial_board = zeros((ROWS_COUNT, COLUMNS_COUNT), int)
+
 initial_columns = [[] for _ in range(ROWS_COUNT)]
 
 for i in range(COLUMNS_COUNT):
@@ -121,6 +189,8 @@ size = (width, height)
 RADIUS = int(SQR_SIZE / 2 - 5)
 screen = pygame.display.set_mode(size)
 my_font = pygame.font.SysFont("monospace", 50)
+algorithm = get_algorithm()
+pygame.draw.rect(screen, GRAY, (0, 0, width, SQR_SIZE))
 root.draw_board()
 
 while not game_over:
@@ -137,6 +207,7 @@ while not game_over:
                 pygame.draw.circle(screen, RED, (pos_x, int(SQR_SIZE / 2)), RADIUS)
             else:
                 pygame.draw.circle(screen, YELLOW, (pos_x, int(SQR_SIZE / 2)), RADIUS)
+
         pygame.display.update()
 
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -150,29 +221,47 @@ while not game_over:
                     player_turn += 1
 
                 if root.is_full():
-                    label = my_font.render("Human Won!", 1, RED)
-                    screen.blit(label, ((SQR_SIZE * 1.5), (SQR_SIZE - 60) / 2))
                     game_over = True
 
-            # Ask for Player 2 Input
-            else:
-                pos_x = event.pos[0]
-                insert_in_col = int(math.floor(pos_x / SQR_SIZE))
-                if root.drop_coin(insert_in_col, AI_VALUE):
-                    player_turn += 1
-
-                if root.is_full():
-                    label = my_font.render("AI Won!", 1, YELLOW)
-                    screen.blit(label, ((SQR_SIZE * 2), (SQR_SIZE - 60) / 2))
-                    game_over = True
-
-            root.draw_board()
-
-            player_turn += 1
-            player_turn = player_turn % 2
-
-            if game_over:
-                game_over = False
-                pygame.time.wait(3000)
-                root = C4Puzzle(deepcopy(initial_board), deepcopy(initial_columns))
                 root.draw_board()
+
+                player_turn += 1
+                player_turn = player_turn % 2
+
+    if player_turn == AI and not game_over:
+        if algorithm == MINIMAX:
+            insert_in_col = root.minimax()
+        else:
+            insert_in_col = root.alpha_beta()
+
+        if root.drop_coin(insert_in_col, AI_VALUE):
+            player_turn += 1
+
+        if root.is_full():
+            game_over = True
+
+        root.draw_board()
+
+        player_turn += 1
+        player_turn = player_turn % 2
+
+    if game_over:
+        player_count = root.connections_count(PLAYER_VALUE)
+        ai_count = root.connections_count(AI_VALUE)
+
+        if player_count > ai_count:
+            label = my_font.render("Human Won!", True, RED)
+            screen.blit(label, ((SQR_SIZE * 1.5), (SQR_SIZE - 60) / 2))
+        elif ai_count > player_count:
+            label = my_font.render("AI Won!", True, YELLOW)
+            screen.blit(label, ((SQR_SIZE * 2), (SQR_SIZE - 60) / 2))
+        else:
+            label = my_font.render("Draw!", True, BLUE)
+            screen.blit(label, ((SQR_SIZE * 2.5), (SQR_SIZE - 60) / 2))
+        root.draw_board()
+
+        game_over = False
+        pygame.time.wait(5000)
+        root = C4Puzzle(deepcopy(initial_board), deepcopy(initial_columns))
+        algorithm = get_algorithm()
+        root.draw_board()
