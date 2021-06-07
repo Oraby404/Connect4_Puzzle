@@ -4,8 +4,8 @@ import pygame
 import sys
 import math
 
-ROWS_COUNT = 6
-COLUMNS_COUNT = 7
+ROWS_COUNT = 8
+COLUMNS_COUNT = 8
 
 PLAYER = 0
 AI = 1
@@ -42,7 +42,7 @@ class C4Puzzle:
                 if self.board[r][col] == 0:
                     self.board[r][col] = attribute
                     self.valid_columns[r].remove(col)
-                    if r < 5:
+                    if r < ROWS_COUNT - 1:
                         self.valid_columns[r + 1].append(col)
                     return False
         return True
@@ -56,7 +56,7 @@ class C4Puzzle:
                     new_valid_columns = deepcopy(self.valid_columns)
                     new_board[i][j] = attribute
                     new_valid_columns[i].remove(j)
-                    if i < 5:
+                    if i < ROWS_COUNT - 1:
                         new_valid_columns[i + 1].append(j)
                     new_node = C4Puzzle(new_board, new_valid_columns)
                     self.children.append(new_node)
