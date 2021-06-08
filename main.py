@@ -191,7 +191,7 @@ class C4Puzzle:
         for col in self.valid_columns:
             temp_board = deepcopy(self)
             self.drop_coin(temp_board, col, piece)
-            score = self.connections_count(temp_board, piece)
+            score = self.calc_score(temp_board, piece)
             if score > best_score:
                 best_score = score
                 best_col = col
