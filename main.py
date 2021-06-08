@@ -18,6 +18,12 @@ algorithm = -1
 MINIMAX = 0
 ALPHA_BETA = 1
 
+EMPTY = 0
+PLAYER_PIECE = 1
+AI_PIECE = 2
+step_default = 4
+
+
 game_over = 0
 player_turn = PLAYER
 
@@ -120,14 +126,77 @@ class C4Puzzle:
                     count += 1
         return count
 
+    def checkScore(self, piece):
+        score = 0
+        opp_piece = PLAYER_PIECE
+        if piece == PLAYER_PIECE:
+            opp_piece = AI_PIECE
+
+        if self.count(piece) == 4:
+            score += 100
+        elif self.count(piece) == 3 and self.count(EMPTY) == 1:
+            score += 5
+        elif self.count(piece) == 2 and self.count(EMPTY) == 2:
+            score += 2
+
+        if self.count(opp_piece) == 3 and self.count(EMPTY) == 1:
+            score -= 4
+
+        return score
+
+    def calc_score(self, piece):
+        score = 0
+
+        ## Score center column
+        center_array = [int(i) for i in list(self[:, COLUMNS_COUNT // 2])]
+        center_count = center_array.count(piece)
+        score += center_count * 3
+
+        ## Score Horizontal
+        for r in range(ROWS_COUNT):
+            row_array = [int(i) for i in list(self[r, :])]
+            for c in range(COLUMNS_COUNT - 3):
+                step = row_array[c:c + step_default]
+                score += self.checkScore(step, piece)
+
+        ## Score Vertical
+        for c in range(COLUMNS_COUNT):
+            col_array = [int(i) for i in list(self[:, c])]
+            for r in range(ROWS_COUNT - 3):
+                step = col_array[r:r + step_default]
+                score += self.checkScore(step, piece)
+
+        ## Score posiive sloped diagonal
+        for r in range(ROWS_COUNT - 3):
+            for c in range(COLUMNS_COUNT - 3):
+                step = [self[r + i][c + i] for i in range(step_default)]
+                score += self.checkScore(step, piece)
+
+        for r in range(ROWS_COUNT - 3):
+            for c in range(COLUMNS_COUNT - 3):
+                step = [self[r + 3 - i][c + i] for i in range(step_default)]
+                score += self.checkScore(step, piece)
+
+        return score
+
     def minimax(self):
         return random.randint(0, 6)
 
     def alpha_beta(self):
         return random.randint(0, 6)
 
-    def heuristic(self):
-        pass
+    def heuristic(self, piece):
+        best_score = -10000
+        best_col = random.choice(self.valid_columns)
+        for col in self.valid_columns:
+            temp_board = deepcopy(self)
+            self.drop_coin(temp_board, col, piece)
+            score = self.connections_count(temp_board, piece)
+            if score > best_score:
+                best_score = score
+                best_col = col
+
+        return best_col
 
     def is_full(self):
         return all([not element for element in self.valid_columns])
