@@ -21,6 +21,9 @@ algorithm = -1
 MINIMAX = 0
 ALPHA_BETA = 1
 
+# max search depth , equals number of levels , equals number of edges from root to leaf
+DEPTH_CUTOFF = 3
+
 game_over = 0
 player_turn = AI
 
@@ -40,7 +43,6 @@ class C4Puzzle:
         self.children = []
         self.parent = None
         self.valid_columns = valid_columns
-        self.cutoff = 4
         self.score = 0
         self.prev_col = 0
 
@@ -76,17 +78,17 @@ class C4Puzzle:
                 break
 
     def create_tree(self, turn, depth):
-        if depth < self.cutoff:
+        if depth > 0:
             # max turn
             if turn == PLAYER:
                 self.generate_children(PLAYER_VALUE)
                 for child in self.children:
-                    child.create_tree(AI, depth + 1)
+                    child.create_tree(AI, depth - 1)
             # min turn
             else:
                 self.generate_children(AI_VALUE)
                 for child in self.children:
-                    child.create_tree(PLAYER, depth + 1)
+                    child.create_tree(PLAYER, depth - 1)
 
     def connections_count(self, attribute):
         count = 0
@@ -127,17 +129,73 @@ class C4Puzzle:
                     count += 1
         return count
 
-    def minimax(self, maximizing_player):
-        if maximizing_player:
-            return self.heuristic(AI_VALUE)
-        else:
-            return self.heuristic(PLAYER_VALUE)
+    def minimax(self, depth, maximizing_player):
+        if depth == 0:  # or self.is_full()
+            self.score = self.evaluate_windows(AI_VALUE)
+            return self
 
-    def alpha_beta(self, alpha, beta, maximizing_player):
         if maximizing_player:
-            return self.heuristic(AI_VALUE)
+            value = -math.inf
+            self.generate_children(AI_VALUE)
+            best_child = random.choice(self.children)
+            for child in self.children:
+                new_child = child.minimax(depth - 1, PLAYER)
+
+                if new_child.score > value:
+                    value = new_child.score
+                    best_child = new_child
+
+            return best_child
+
         else:
-            return self.heuristic(PLAYER_VALUE)
+            value = math.inf
+            self.generate_children(PLAYER_VALUE)
+            best_child = random.choice(self.children)
+            for child in self.children:
+                new_child = child.minimax(depth - 1, AI)
+
+                if new_child.score < value:
+                    value = new_child.score
+                    best_child = new_child
+
+            return best_child
+
+    def alpha_beta(self, depth, alpha, beta, maximizing_player):
+        if depth == 0:  # or self.is_full()
+            self.score = self.evaluate_windows(AI_VALUE)
+            return self
+
+        if maximizing_player:
+            value = -math.inf
+            self.generate_children(AI_VALUE)
+            best_child = random.choice(self.children)
+            for child in self.children:
+                new_child = child.minimax(depth - 1, PLAYER)
+
+                if new_child.score > value:
+                    value = new_child.score
+                    best_child = new_child
+
+                alpha = max(alpha, value)
+                if alpha >= beta:
+                    break
+            return best_child
+
+        else:
+            value = math.inf
+            self.generate_children(PLAYER_VALUE)
+            best_child = random.choice(self.children)
+            for child in self.children:
+                new_child = child.minimax(depth - 1, AI)
+
+                if new_child.score < value:
+                    value = new_child.score
+                    best_child = new_child
+
+                beta = min(beta, value)
+                if alpha >= beta:
+                    break
+            return best_child
 
     def heuristic(self, piece):
         best_score = 0
@@ -195,17 +253,17 @@ class C4Puzzle:
         if piece == PLAYER_VALUE:
             opp_piece = AI_VALUE
 
-        if window.count(piece) == 4:
+        if window.count(piece) == connect_len:
             score += 10000
-        elif window.count(piece) == 3 and window.count(EMPTY) == 1:
+        elif (window.count(piece) == connect_len - 1) and window.count(EMPTY) == 1:
             score += 900
-        elif window.count(piece) == 2 and window.count(EMPTY) == 2:
+        elif (window.count(piece) == connect_len - 2) and window.count(EMPTY) == 2:
             score += 40
 
-        if window.count(opp_piece) == 3 and window.count(EMPTY) == 1:
-            score -= 450
-        elif window.count(opp_piece) == 2 and window.count(EMPTY) == 2:
-            score -= 20
+        # if (window.count(opp_piece) == connect_len - 1) and window.count(EMPTY) == 1:
+        #     score -= 450
+        # elif (window.count(opp_piece) == connect_len - 2) and window.count(EMPTY) == 2:
+        #     score -= 20
 
         return score
 
@@ -264,6 +322,8 @@ for i in range(COLUMNS_COUNT):
 
 root = C4Puzzle(deepcopy(initial_board), deepcopy(initial_columns))
 
+# root.create_tree(AI, DEPTH_CUTOFF)
+
 pygame.init()
 size = (width, height)
 RADIUS = int(SQR_SIZE / 2 - 5)
@@ -310,9 +370,11 @@ while not game_over:
     if player_turn == AI and not game_over:
 
         if algorithm == MINIMAX:
-            root = root.minimax(AI)
+            insert_in_col = root.minimax(DEPTH_CUTOFF, AI).prev_col
         else:
-            root = root.alpha_beta(-math.inf, math.inf, AI)
+            insert_in_col = root.alpha_beta(DEPTH_CUTOFF, -math.inf, math.inf, AI).prev_col
+
+        root.drop_coin(insert_in_col, AI_VALUE)
 
         if root.is_full():
             game_over = True
