@@ -1,4 +1,4 @@
-from numpy import zeros, flip
+import numpy
 from copy import deepcopy
 import pygame
 import sys
@@ -13,13 +13,16 @@ AI = 1
 
 PLAYER_VALUE = 1
 AI_VALUE = -1
+EMPTY = 0
+
+connect_len = 4
 
 algorithm = -1
 MINIMAX = 0
 ALPHA_BETA = 1
 
 game_over = 0
-player_turn = PLAYER
+player_turn = AI
 
 SQR_SIZE = 76
 width = COLUMNS_COUNT * SQR_SIZE
@@ -35,15 +38,16 @@ class C4Puzzle:
     def __init__(self, board, valid_columns):
         self.board = board
         self.children = []
+        self.parent = None
         self.valid_columns = valid_columns
         self.cutoff = 4
         self.score = 0
         self.prev_col = 0
 
     def drop_coin(self, col, attribute):
-        if self.board[ROWS_COUNT - 1][col] == 0:
+        if self.board[ROWS_COUNT - 1][col] == EMPTY:
             for r in range(ROWS_COUNT):
-                if self.board[r][col] == 0:
+                if self.board[r][col] == EMPTY:
                     self.board[r][col] = attribute
                     self.valid_columns[r].remove(col)
                     if r < ROWS_COUNT - 1:
@@ -62,7 +66,10 @@ class C4Puzzle:
                     new_valid_columns[i].remove(j)
                     if i < ROWS_COUNT - 1:
                         new_valid_columns[i + 1].append(j)
+
                     new_node = C4Puzzle(new_board, new_valid_columns)
+                    new_node.prev_col = j
+                    new_node.parent = self
                     self.children.append(new_node)
                     col_count += 1
             else:
@@ -120,20 +127,94 @@ class C4Puzzle:
                     count += 1
         return count
 
-    def minimax(self):
-        return random.randint(0, 6)
+    def minimax(self, maximizing_player):
+        if maximizing_player:
+            return self.heuristic(AI_VALUE)
+        else:
+            return self.heuristic(PLAYER_VALUE)
 
-    def alpha_beta(self):
-        return random.randint(0, 6)
+    def alpha_beta(self, alpha, beta, maximizing_player):
+        if maximizing_player:
+            return self.heuristic(AI_VALUE)
+        else:
+            return self.heuristic(PLAYER_VALUE)
 
-    def heuristic(self):
-        pass
+    def heuristic(self, piece):
+        best_score = 0
+        self.generate_children(piece)
+        best_child = random.choice(self.children)
+        for child in self.children:
+            self.score = child.evaluate_windows(piece)
+            if self.score > best_score and self.score != 0:
+                best_score = self.score
+                best_child = child
+        return best_child
+
+    def evaluate_windows(self, piece):
+        score = 0
+        # Score Horizontal
+        for r in range(ROWS_COUNT):
+            for c in range(COLUMNS_COUNT - 3):
+                window = self.board[r][c:c + connect_len]
+                score += self.sum_window_score(window, piece)
+            if (r + 1 < ROWS_COUNT) and (self.board[r + 1].count(EMPTY) == COLUMNS_COUNT):
+                break
+
+        # Score Vertical
+        for c in range(COLUMNS_COUNT):
+            col_array = [self.board[i][c] for i in range(ROWS_COUNT)]
+
+            # Score center column
+            if c == 3:
+                center_count = col_array.count(piece)
+                score += center_count * 2
+
+            for r in range(ROWS_COUNT - 3):
+                window = col_array[r:r + connect_len]
+                score += self.sum_window_score(window, piece)
+                if col_array[r + 1] == EMPTY:
+                    break
+
+        # Score positive sloped diagonal
+        for r in range(ROWS_COUNT - 3):
+            for c in range(COLUMNS_COUNT - 3):
+                window = [self.board[r + i][c + i] for i in range(connect_len)]
+                score += self.sum_window_score(window, piece)
+
+        # Score negatively sloped diagonal
+        for r in range(ROWS_COUNT - 3):
+            for c in range(COLUMNS_COUNT - 3):
+                window = [self.board[r + 3 - i][c + i] for i in range(connect_len)]
+                score += self.sum_window_score(window, piece)
+
+        return score
+
+    def sum_window_score(self, window, piece):
+        score = 0
+        opp_piece = PLAYER_VALUE
+        if piece == PLAYER_VALUE:
+            opp_piece = AI_VALUE
+
+        if window.count(piece) == 4:
+            score += 10000
+        elif window.count(piece) == 3 and window.count(EMPTY) == 1:
+            score += 900
+        elif window.count(piece) == 2 and window.count(EMPTY) == 2:
+            score += 40
+
+        if window.count(opp_piece) == 3 and window.count(EMPTY) == 1:
+            score -= 450
+        elif window.count(opp_piece) == 2 and window.count(EMPTY) == 2:
+            score -= 20
+
+        return score
 
     def is_full(self):
         return all([not element for element in self.valid_columns])
 
     def print_board(self):
-        print(flip(self.board, 0))
+        arr = numpy.array(self.board)
+        print(numpy.flip(arr, 0))
 
     def draw_board(self):
         pygame.draw.rect(screen, BLUE, (0, SQR_SIZE, SQR_SIZE * COLUMNS_COUNT, SQR_SIZE * ROWS_COUNT))
@@ -174,7 +255,7 @@ def get_algorithm():
                     return ALPHA_BETA
 
 
-initial_board = zeros((ROWS_COUNT, COLUMNS_COUNT), int)
+initial_board = [[0 for i in range(COLUMNS_COUNT)] for j in range(ROWS_COUNT)]
 
 initial_columns = [[] for _ in range(ROWS_COUNT)]
 
@@ -182,7 +263,6 @@ for i in range(COLUMNS_COUNT):
     initial_columns[0].append(i)
 
 root = C4Puzzle(deepcopy(initial_board), deepcopy(initial_columns))
-# root.create_tree(PLAYER, 0)
 
 pygame.init()
 size = (width, height)
@@ -217,33 +297,28 @@ while not game_over:
             if player_turn == PLAYER:
                 pos_x = event.pos[0]
                 insert_in_col = int(math.floor(pos_x / SQR_SIZE))
+
                 if root.drop_coin(insert_in_col, PLAYER_VALUE):
-                    player_turn += 1
+                    player_turn = PLAYER
+                else:
+                    player_turn = AI
+                    root.draw_board()
 
                 if root.is_full():
                     game_over = True
 
-                root.draw_board()
-
-                player_turn += 1
-                player_turn = player_turn % 2
-
     if player_turn == AI and not game_over:
-        if algorithm == MINIMAX:
-            insert_in_col = root.minimax()
-        else:
-            insert_in_col = root.alpha_beta()
 
-        if root.drop_coin(insert_in_col, AI_VALUE):
-            player_turn += 1
+        if algorithm == MINIMAX:
+            root = root.minimax(AI)
+        else:
+            root = root.alpha_beta(-math.inf, math.inf, AI)
 
         if root.is_full():
             game_over = True
 
         root.draw_board()
-
-        player_turn += 1
-        player_turn = player_turn % 2
+        player_turn = PLAYER
 
     if game_over:
         player_count = root.connections_count(PLAYER_VALUE)
@@ -259,7 +334,6 @@ while not game_over:
             label = my_font.render("Draw!", True, BLUE)
             screen.blit(label, ((SQR_SIZE * 2.5), (SQR_SIZE - 60) / 2))
         root.draw_board()
-
         game_over = False
         pygame.time.wait(5000)
         root = C4Puzzle(deepcopy(initial_board), deepcopy(initial_columns))
