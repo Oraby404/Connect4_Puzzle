@@ -23,7 +23,7 @@ MINIMAX = 0
 ALPHA_BETA = 1
 
 # max search depth , equals number of levels , equals number of edges from root to leaf
-DEPTH_CUTOFF = 3
+DEPTH_CUTOFF = 4
 
 game_over = 0
 player_turn = AI
@@ -42,10 +42,7 @@ class C4Puzzle:
     def __init__(self, board, valid_columns):
         self.board = board
         self.children = []
-        self.parent = None
         self.valid_columns = valid_columns
-        self.score = 0
-        self.prev_col = 0
 
     def drop_coin(self, col, attribute):
         if self.board[ROWS_COUNT - 1][col] == EMPTY:
@@ -55,8 +52,8 @@ class C4Puzzle:
                     self.valid_columns[r].remove(col)
                     if r < ROWS_COUNT - 1:
                         self.valid_columns[r + 1].append(col)
-                    return False
-        return True
+                    return False, r
+        return True, r
 
     def generate_children(self, attribute):
         col_count = 0
@@ -69,10 +66,7 @@ class C4Puzzle:
                     new_valid_columns[i].remove(j)
                     if i < ROWS_COUNT - 1:
                         new_valid_columns[i + 1].append(j)
-
                     new_node = C4Puzzle(new_board, new_valid_columns)
-                    new_node.prev_col = j
-                    new_node.parent = self
                     self.children.append(new_node)
                     col_count += 1
             else:
@@ -80,17 +74,15 @@ class C4Puzzle:
 
     def create_tree(self, depth, turn):
         if depth > 0:
-            # max turn
             if turn == PLAYER:
-                self.generate_children(PLAYER_VALUE)
+                if not len(self.children):
+                    self.generate_children(PLAYER_VALUE)
                 for child in self.children:
-                    # child.score = child.evaluate_windows(PLAYER_VALUE)
                     child.create_tree(depth - 1, AI)
-            # min turn
             else:
-                self.generate_children(AI_VALUE)
+                if not len(self.children):
+                    self.generate_children(AI_VALUE)
                 for child in self.children:
-                    # child.score = child.evaluate_windows(AI_VALUE)
                     child.create_tree(depth - 1, PLAYER)
 
     def connections_count(self, attribute):
@@ -376,11 +368,17 @@ while not game_over:
                 pos_x = event.pos[0]
                 insert_in_col = int(math.floor(pos_x / SQR_SIZE))
 
-                if root.drop_coin(insert_in_col, PLAYER_VALUE):
+                valid, insert_in_row = root.drop_coin(insert_in_col, PLAYER_VALUE)
+                if valid:
                     player_turn = PLAYER
                 else:
                     player_turn = AI
                     root.draw_board()
+
+                for child in root.children:
+                    if child.board[insert_in_row][insert_in_col] == PLAYER_VALUE:
+                        root = child
+                        break
 
                 if root.is_full():
                     game_over = True
@@ -389,14 +387,10 @@ while not game_over:
 
         if algorithm == MINIMAX:
             root.create_tree(DEPTH_CUTOFF, AI)
-            new_root = root.minimax()
-            root = C4Puzzle(deepcopy(new_root.board), deepcopy(new_root.valid_columns))
-            # root = root.heuristic(AI_VALUE)
+            root = root.minimax()
         else:
             root.create_tree(DEPTH_CUTOFF, AI)
-            new_root = root.alpha_beta(-math.inf, math.inf)
-            root = C4Puzzle(deepcopy(new_root.board), deepcopy(new_root.valid_columns))
-            # root = root.heuristic(AI_VALUE)
+            root = root.alpha_beta(-math.inf, math.inf)
 
         if root.is_full():
             game_over = True
