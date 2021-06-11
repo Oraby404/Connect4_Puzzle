@@ -23,7 +23,7 @@ MINIMAX = 0
 ALPHA_BETA = 1
 
 # max search depth , equals number of levels , equals number of edges from root to leaf
-DEPTH_CUTOFF = 4
+DEPTH_CUTOFF = 3
 
 game_over = 0
 player_turn = AI
@@ -389,13 +389,14 @@ while not game_over:
 
         if algorithm == MINIMAX:
             root.create_tree(DEPTH_CUTOFF, AI)
-            root = root.minimax()
+            new_root = root.minimax()
+            root = C4Puzzle(deepcopy(new_root.board), deepcopy(new_root.valid_columns))
             # root = root.heuristic(AI_VALUE)
         else:
             root.create_tree(DEPTH_CUTOFF, AI)
-            root = root.alpha_beta(-math.inf, math.inf)
+            new_root = root.alpha_beta(-math.inf, math.inf)
+            root = C4Puzzle(deepcopy(new_root.board), deepcopy(new_root.valid_columns))
             # root = root.heuristic(AI_VALUE)
-            pass
 
         if root.is_full():
             game_over = True
