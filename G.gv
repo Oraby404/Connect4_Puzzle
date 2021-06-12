@@ -1,0 +1,15 @@
+digraph G {
+	"Min
+Column 0 
+Score = 100006" [fillcolor=red style=filled]
+	"Max
+Root" -> "Min
+Column 0 
+Score = 100006"
+	"Min
+Column 0 
+Score = 100006" -> "Max
+Column 0 
+Previous Column 0 
+Score = 100006"
+}
